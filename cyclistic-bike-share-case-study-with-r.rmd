@@ -1,0 +1,256 @@
+# %% [code]
+---
+title: "How does a bike-share navigate speedy success?"
+author: "Derrick Kwaku Togodui"
+date: "2023-04-29"
+output: html_document
+---
+
+# Case Study: How does a bike-share navigate speedy success?
+
+## Background
+
+In 2016, Cyclistic launched a successful bike-share offering. Since then, the program has grown to a fleet of 5,824 bicycles that
+are geotracked and locked into a network of 692 stations across Chicago. The bikes can be unlocked from one station and returned to any other station in the system anytime.
+
+Until now, Cyclistic’s marketing strategy relied on building general awareness and appealing to broad consumer segments.One approach that helped make these things possible was the flexibility of its pricing plans: single-ride passes, full-day passes, and annual memberships. Customers who purchase single-ride or full-day passes are referred to as casual riders. Customers who purchase annual memberships are Cyclistic members.
+
+## Business Task
+
+This report examines the business question **what is the most effective marketing strategy to converting Cyclistic's casual riders to annual members?**
+
+### The above business goal can be broken into 3 questions:
+* How do annual members and casual riders use Cyclistic bikes differently?
+* Why would casual riders buy Cyclistic annual memberships?
+* How can Cyclistic use digital media to influence casual riders to become members?
+
+
+However, the objective of this analysis is to answer the question: **How do annual members and casual riders use Cyclistic bikes differently?**
+
+## Stakeholders
+* Cyclistic executive team
+* Director of marketing
+* Cyclistic marketing team
+* Cyclistic users
+
+## Data Sources
+12 months of user data from January 2022 to December 2022 has been collected and used in this project. The datasets are in csv file and each contains details of every ride logged by Cyclistic customers. The data has been made available by Motivate International Inc. under this [license](https://ride.divvybikes.com/data-license-agreement).
+
+## Tool(s) for this project
+
+Due to the size of the dataset, R is being used in cleaning, processing, analyzing, visualization and documentation.
+
+# Cleaning and Preparation of Data for Analysis
+
+### loading packages
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(janitor)
+library(dplyr)
+```
+
+### Loading all datasets
+
+```{r}
+tripdata22_jan <- read_csv("/kaggle/input/divvy-tripdata-2022/202201-divvy-tripdata.csv")
+tripdata22_feb <- read_csv("/kaggle/input/divvy-tripdata-2022/202202-divvy-tripdata.csv")
+tripdata22_mar <- read_csv("/kaggle/input/divvy-tripdata-2022/202203-divvy-tripdata.csv")
+tripdata22_apr <- read_csv("/kaggle/input/divvy-tripdata-2022/202204-divvy-tripdata.csv")
+tripdata22_may <- read_csv("/kaggle/input/divvy-tripdata-2022/202205-divvy-tripdata.csv")
+tripdata22_jun <- read_csv("/kaggle/input/divvy-tripdata-2022/202206-divvy-tripdata.csv")
+tripdata22_jul <- read_csv("/kaggle/input/divvy-tripdata-2022/202207-divvy-tripdata.csv")
+tripdata22_aug <- read_csv("/kaggle/input/divvy-tripdata-2022/202208-divvy-tripdata.csv")
+tripdata22_sep <- read_csv("/kaggle/input/divvy-tripdata-2022/202209-divvy-publictripdata.csv")
+tripdata22_oct <- read_csv("/kaggle/input/divvy-tripdata-2022/202210-divvy-tripdata.csv")
+tripdata22_nov <- read_csv("/kaggle/input/divvy-tripdata-2022/202211-divvy-tripdata.csv")
+tripdata22_dec <- read_csv("/kaggle/input/divvy-tripdata-2022/202212-divvy-tripdata.csv")
+```
+
+### Combine all datasets into one data frame
+
+```{r}
+tripdata22com <- rbind(tripdata22_jan, tripdata22_feb, tripdata22_mar, tripdata22_apr, tripdata22_may, tripdata22_jun, tripdata22_jul, tripdata22_aug, tripdata22_sep, tripdata22_oct, tripdata22_nov, tripdata22_dec)
+```
+
+### Removing columns that will not be used in the analysis
+
+```{r}
+tripdata22com <- tripdata22com %>%
+  select(-c(start_station_id, end_station_name, end_station_id, start_lat, start_lng, end_lat, end_lng))
+```
+
+### Inspect the new table that has been created
+
+```{r}
+colnames(tripdata22com)
+nrow(tripdata22com)
+dim(tripdata22com)
+head(tripdata22com)
+str(tripdata22com)
+summary(tripdata22com)
+```
+
+### Add columns that list the date, month, day, and year of each ride
+
+```{r}
+tripdata22com$date <- as.Date(tripdata22com$started_at) #default format is yyyy-mm-dd
+tripdata22com$month <- format(as.Date(tripdata22com$date), "%m")
+tripdata22com$day <- format(as.Date(tripdata22com$date), "%d")
+tripdata22com$year <- format(as.Date(tripdata22com$date), "%Y")
+tripdata22com$day_of_week <- format(as.Date(tripdata22com$date), "%A")
+```
+
+### Calculated column that shows the time of each unique ride
+
+```{r}
+tripdata22com$ride_length <- difftime(tripdata22com$ended_at, tripdata22com$started_at)
+```
+
+### Inspect the structure of the columns
+
+```{r}
+str(tripdata22com)
+```
+
+### Convert ride_length from character to numeric
+
+```{r}
+is.factor(tripdata22com$ride_length)
+tripdata22com$ride_length <- as.numeric(as.character(tripdata22com$ride_length))
+is.numeric(tripdata22com$ride_length)
+```
+
+### Remove blank rows from dataset
+
+```{r}
+tripdata22com_v2 <- tripdata22com[!(tripdata22com$start_station_name == "HQ QR"|tripdata22com$ride_length<0),]
+```
+
+### Descriptive analysis on ride length (in seconds)
+
+```{r}
+aggregate(tripdata22com_v2$ride_length ~ tripdata22com_v2$member_casual, FUN = mean)
+aggregate(tripdata22com_v2$ride_length ~ tripdata22com_v2$member_casual, FUN = median)
+aggregate(tripdata22com_v2$ride_length ~ tripdata22com_v2$member_casual, FUN = max)
+aggregate(tripdata22com_v2$ride_length ~ tripdata22com_v2$member_casual, FUN = min)
+```
+
+### Order days of the week
+
+```{r}
+tripdata22com_v2$day_of_week <- ordered(tripdata22com_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+
+### Create weekday field
+
+```{r}
+tripdata22com_v2 %>% 
+  mutate(day_of_week = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, day_of_week) %>%  
+  summarise(number_of_rides = n())
+```
+
+# Data Visualization
+
+### Visualization for number of rides per day of week
+
+```{r}
+tripdata22com_v2 %>%
+  mutate(day_of_week = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, day_of_week) %>%
+  summarise(number_of_rides = n()) %>%
+  arrange(member_casual, day_of_week)  %>% 
+  filter(!is.na(day_of_week)) %>%
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(x='Day of Week', y='Total Number of Rides', title = 'Rides Per Day of Week', fill = 'Type of Membership') +
+  scale_y_continuous(labels = scales::comma)
+```
+
+
+ Rides per day of week for casual riders peak on Saturdays 
+ and Sundays whiles member riders peak through Monday to Friday.
+ This shows casual riders use the bikes for leisure and members
+ use it to commute to work.
+
+
+### Visualization for average duration
+
+```{r}
+tripdata22com_v2 %>% 
+  mutate(day_of_week = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, day_of_week) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, day_of_week)  %>% 
+  filter(!is.na(day_of_week)) %>%
+  ggplot(aes(x = day_of_week, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  labs(x='Days of The Week', y='Average Duration', title='Average Ride Time Per Week', fill='Type of Membership')
+```
+
+
+Average duration of riders shows a huge difference.
+Casual riders spend more time using Cyclistic bikes
+than annual members. And again,the average ride time
+per week for casual riders peak on Saturday and Sunday.
+
+### Visualization for rides per month
+
+```{r}
+tripdata22com_v2 %>%
+  group_by(member_casual, month) %>%
+  summarise(total_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  filter(!is.na(month)) %>%
+  ggplot(aes(x=month, y=total_rides, fill=member_casual)) + geom_col(position="dodge")+
+  labs(x="Months", y="Total Number of Rides", title="Rides Per Month", fill="Type of Membership")+
+  scale_y_continuous(labels = scales::comma)
+```
+
+Rides per month shows member riders peak from May through November. Casual riders peak in June, 
+July and August which are the summer months in Chicago. Contrarily, we can see a drop in casual riders
+per month from December to March which are the winter months in Chicago.
+
+
+### Visualization for most popular bike
+
+```{r}
+tripdata22com_v2 %>%
+  filter(!is.na(rideable_type)) %>%
+  ggplot(aes(x=rideable_type, fill=member_casual)) + geom_bar(position = "dodge") +
+  labs(x='Type of Bike', y='Number of Rentals', title='Which Bike Works The Most', fill='Type of Membership')+
+  scale_y_continuous(labels = scales::comma)
+```
+
+The most popular bike for casual and member riders are Classic and Electric bike.
+Docked is the least popular for both riders.
+
+
+## Summary: Key Findings
+
+Results from the analysis tells us that:
+
+* Long term members use Cyclistic bikes from Monday through to Friday. Casual riders use Cyclistic bikes
+  the most on Saturday and Sunday.
+* Casual riders spend the most time using Cyclistic bikes per week than long term members. Also,
+  the average time for casual riders is the highest on Saturday and Sunday.
+* Rides per month for casual riders peak in June, July and August which correlates with the
+  summer months in Chicago. Again, rides per month for casual riders decline from December to
+  March (the winter months in Chicago). 
+* Classic bikes are the most preferred for both casual and long term members. Electric bikes
+  are the second and docked bikes are the least preferred.
+
+## Recommendations
+
+* Cyclistic should introduce a new plan that is appealing to casual members to convert them
+  to long term members.
+* Organizing weekend campaigns to educate casual members of how much they will save if they
+  convert to member riders.
+* Intensify marketing ads in summer months since it is the months casual riders use Cyclistic
+  the most.
+
+## Thank you for reading my work. Please leave a comment!
